@@ -8,100 +8,65 @@ const BaseURL = "https://gogoanime3.co";
 const USER_AGENT =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.71 Safari/537.36";
 
+// Search function
 async function getSearch(name, page = 1) {
-    const response = await fetch(
-        BaseURL + "/search.html?keyword=" + name + "&page=" + page
-    );
+    const response = await fetch(BaseURL + "/search.html?keyword=" + name + "&page=" + page);
     let html = await response.text();
-    let $ = cheerio.load(html);
+    let $ = load(html);
     const searchResults = [];
 
     $("ul.items li").each(function (i, elem) {
-        let anime = {};
-        $ = cheerio.load($(elem).html());
-        anime.title = $("p.name a").text() || null;
-        anime.img = $("div.img a img").attr("src") || null;
-        anime.link = $("div.img a").attr("href") || null;
-        anime.id = anime.link.split("/category/")[1] || null;
-        anime.releaseDate = $("p.released").text().trim() || null;
-        if (anime.link) anime.link = BaseURL + anime.link;
-
+        const $elem = load($(elem).html());
+        let anime = {
+            title: $elem("p.name a").text() || null,
+            img: $elem("div.img a img").attr("src") || null,
+            link: BaseURL + $elem("div.img a").attr("href") || null,
+            id: $elem("div.img a").attr("href").split("/category/")[1] || null,
+            releaseDate: $elem("p.released").text().trim() || null,
+        };
         searchResults.push(anime);
     });
 
     return searchResults;
 }
 
+// Anime details function
 async function getAnime(id) {
-    let response = await fetch(BaseURL + "/category/" + id);
-    let html = await response.text();
-    let $ = cheerio.load(html);
-    let animeData = {
+    const response = await fetch(BaseURL + "/category/" + id);
+    const html = await response.text();
+    const $ = load(html);
+    const animeData = {
         name: $("div.anime_info_body_bg h1").text(),
         image: $("div.anime_info_body_bg img").attr("src"),
         id: id,
     };
 
     $("div.anime_info_body_bg p.type").each(function (i, elem) {
-        const $x = cheerio.load($(elem).html());
-        let keyName = $x("span")
-            .text()
-            .toLowerCase()
-            .replace(":", "")
-            .trim()
-            .replace(/ /g, "_");
-        if (/released/g.test(keyName))
-            animeData[keyName] = $(elem)
-                .html()
-                .replace(`<span>${$x("span").text()}</span>`, "");
-        else animeData[keyName] = $x("a").text().trim() || null;
+        const $elem = load($(elem).html());
+        let keyName = $elem("span").text().toLowerCase().replace(":", "").trim().replace(/ /g, "_");
+        if (/released/g.test(keyName)) {
+            animeData[keyName] = $(elem).html().replace(`<span>${$elem("span").text()}</span>`, "");
+        } else {
+            animeData[keyName] = $elem("a").text().trim() || null;
+        }
     });
 
-    animeData.plot_summary = $("div.description").text().trim()
+    animeData.plot_summary = $("div.description").text().trim();
 
     const animeid = $("input#movie_id").attr("value");
-    response = await fetch(
-        "https://ajax.gogocdn.net/ajax/load-list-episode?ep_start=0&ep_end=1000000&id=" +
-        animeid
-    );
-    html = await response.text();
-    $ = cheerio.load(html);
+    const episodeResponse = await fetch(`https://ajax.gogocdn.net/ajax/load-list-episode?ep_start=0&ep_end=1000000&id=${animeid}`);
+    const episodeHtml = await episodeResponse.text();
+    const $episode = load(episodeHtml);
 
-    let episodes = [];
-    for (const element of $("ul#episode_related a")) {
-        const name = $(element)
-            .find("div")
-            .text()
-            .trim()
-            .split(" ")[1]
-            .slice(0, -3);
-        const link = $(element).attr("href").trim().slice(1);
+    const episodes = [];
+    $episode("ul#episode_related a").each((i, elem) => {
+        const name = $(elem).find("div").text().trim().split(" ")[1].slice(0, -3);
+        const link = $(elem).attr("href").trim().slice(1);
         episodes.push([name, link]);
-    }
-    episodes = episodes.reverse();
-    animeData.episodes = episodes;
-
-    return animeData;
-}
-
-async function getRecentAnime(page = 1) {
-    const response = await fetch(BaseURL + "/?page=" + page);
-    let html = await response.text();
-    let $ = cheerio.load(html);
-    const recentAnime = [];
-
-    $("ul.items li").each(function (i, elem) {
-        $ = cheerio.load($(elem).html());
-        const anime = {
-            title: $("p.name a").text() || null,
-            episode: $("p.episode").text() || null,
-            image: $("div.img img").attr("src") || null,
-            link: BaseURL + $("div.img a").attr("href") || null,
-            id: $("div.img a").attr("href").split("/")[1] || null,
-        };
-        recentAnime.push(anime);
     });
-    return recentAnime;
+
+    animeData.episodes = episodes.reverse();
+    return animeData;
 }
 
 async function getPopularAnime(page = 1, max = 10) {
